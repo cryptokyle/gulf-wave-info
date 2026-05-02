@@ -13,7 +13,7 @@
     body{font:14px/1.35 system-ui;margin:0;color:var(--text);display:flex;flex-direction:column}
 
     /* ULTRA edge-to-edge */
-    header{width:100%;padding:6px 6px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;flex:0 0 auto;box-sizing:border-box}
+    header{width:100%;padding:6px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;flex:0 0 auto;box-sizing:border-box}
     main{width:100%;padding:0 6px 6px;flex:1 1 auto;min-height:0;box-sizing:border-box}
 
     .title{font-weight:800;font-size:20px;justify-self:center}
@@ -23,7 +23,6 @@
     button{cursor:pointer;background:var(--accent);border-color:var(--accent)}
     button.secondary{background:var(--panel);border-color:var(--border2)}
 
-    /* Tighten card + canvas so the map nearly touches screen edges */
     .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:6px;height:100%;display:flex;flex-direction:column;min-height:0}
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 
@@ -32,11 +31,11 @@
 
     .badges{display:flex;gap:8px;flex-wrap:wrap}
     .badges span{padding:4px 10px;border-radius:999px;background:color-mix(in oklab, var(--panel) 40%, #13214a);border:1px solid var(--border)}
+    .badgeSmall{font-size:12px;padding:3px 9px;opacity:.95}
 
     .below{flex:0 0 auto;margin-top:6px}
     .periodTitle{font-weight:800;margin-bottom:6px}
 
-    /* no vertical scroll: bins scroll horizontally inside */
     .periodBar{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;white-space:nowrap;padding-bottom:6px;-webkit-overflow-scrolling:touch}
     .bin{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid var(--border);font-weight:800;color:#06102a;flex:0 0 auto}
 
@@ -44,7 +43,7 @@
     .sw{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto}
     .sw i{display:inline-block;width:10px;height:10px;border-radius:3px;border:1px solid var(--border)}
 
-    /* Drawer collapses to ONLY the tab */
+    /* Drawer */
     .drawerWrap{position:fixed;top:62px;right:0;z-index:20;display:flex;align-items:flex-start}
     .drawerTab{writing-mode:vertical-rl;transform:rotate(180deg);padding:10px 12px;border-radius:12px 0 0 12px;background:#13214a;border:1px solid var(--border);cursor:pointer;font-weight:700;user-select:none;box-shadow:0 8px 30px rgba(0,0,0,.25)}
     html[data-theme="midnight"] .drawerTab{background:#101a3a}
@@ -54,6 +53,11 @@
     .drawer:not(.open) .hide{display:none}
 
     textarea{width:100%;min-height:140px;resize:vertical}
+
+    /* Hover tooltip */
+    #tip{position:fixed;display:none;max-width:320px;padding:10px 12px;border-radius:14px;background:var(--panel);border:1px solid var(--border);box-shadow:0 8px 30px rgba(0,0,0,.35);font-size:12px;pointer-events:none;z-index:50}
+    #tip b{font-size:13px}
+    #tip .muted{color:var(--muted)}
   </style>
 </head>
 <body>
@@ -94,10 +98,13 @@
   </div></div>
 </div>
 
+<div id="tip"></div>
+
 <script>
 const PROXY_URL='/.netlify/functions/ndbc-latest';
 const $=id=>document.getElementById(id);
 const C=$('c'),ctx=C.getContext('2d');
+const tip=$('tip');
 let rows=[], CW=800, CH=500;
 
 const LON_MIN=-98, LON_MAX=-80;
@@ -108,8 +115,8 @@ const miss=v=>v==null||v===''||v==='MM';
 const num=v=>miss(v)?null:+v;
 const m2ft=m=>m==null?null:m*3.28084;
 
-const LAND_GEOJSON=null;      // paste land polygons FeatureCollection
-const BORDERS_GEOJSON=null;   // paste border lines FeatureCollection
+const LAND_GEOJSON=null;      // land polygons FeatureCollection
+const BORDERS_GEOJSON=null;   // border lines FeatureCollection
 
 function resize(){
   const r=C.getBoundingClientRect();
@@ -142,19 +149,52 @@ function proj(lat,lon){
 
 function pColor(s){return s<6?'#60a5fa':s<8?'#34d399':s<10?'#fbbf24':s<12?'#fb7185':'#a78bfa';}
 
+// Local time formatter (device/browser locale + timezone)
+const pad=n=>String(n).padStart(2,'0');
+function tzAbbrev(d){
+  const p=new Intl.DateTimeFormat(undefined,{timeZoneName:'short'}).formatToParts(d);
+  return (p.find(x=>x.type==='timeZoneName')?.value)||'';
+}
+function fmtLocal(ms){
+  if(ms==null) return '—';
+  const d=new Date(ms);
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())} ${tzAbbrev(d)}`.trim();
+}
+
 function parseObs(txt){
   const set=new Set(($('stations').value||'').split(/[\s,]+/).filter(Boolean));
-  rows=txt.split(/\r?\n/).filter(l=>l&&l[0]!=='#').map(l=>l.trim().split(/\s+/)).map(f=>({
-    stn:f[0],lat:num(f[1]),lon:num(f[2]),wvht:num(f[11]),dpd:num(f[12])
-  })).filter(p=>p.lat!=null&&p.lon!=null&&p.lon>=LON_MIN&&p.lon<=LON_MAX&&p.lat>=LAT_MIN_BASE&&p.lat<=LAT_MAX_BASE)
+  rows=txt.split(/\r?\n/)
+    .filter(l=>l&&l[0]!=='#')
+    .map(l=>l.trim().split(/\s+/))
+    .map(f=>{
+      const yyyy=+f[3], mo=+f[4], dd=+f[5], hh=+f[6], mm=+f[7];
+      const t=Number.isFinite(yyyy)&&Number.isFinite(mo)&&Number.isFinite(dd)&&Number.isFinite(hh)&&Number.isFinite(mm)
+        ? Date.UTC(yyyy, mo-1, dd, hh, mm)
+        : null;
+      return { stn:f[0], lat:num(f[1]), lon:num(f[2]), t,
+        wvht:num(f[11]), dpd:num(f[12]) };
+    })
+    .filter(p=>p.lat!=null&&p.lon!=null&&p.lon>=LON_MIN&&p.lon<=LON_MAX&&p.lat>=LAT_MIN_BASE&&p.lat<=LAT_MAX_BASE)
     .filter(p=>!set.size||set.has(p.stn));
   badges(); periods(); draw();
 }
 
 function badges(){
-  const rep=rows.filter(r=>r.wvht!=null),max=rep.length?Math.max(...rep.map(r=>r.wvht)):0;
+  const rep=rows.filter(r=>r.wvht!=null);
+  const max=rep.length?Math.max(...rep.map(r=>r.wvht)):0;
   const avg=rep.length?rep.reduce((a,r)=>a+r.wvht,0)/rep.length:0;
-  $('badges').innerHTML=`<span>Stations: ${rows.length}</span><span>WVHT: ${rep.length}</span><span>Max: ${m2ft(max).toFixed(1)} ft</span><span>Avg: ${m2ft(avg).toFixed(1)} ft</span>`;
+
+  const times=rows.map(r=>r.t).filter(t=>t!=null);
+  const newest=times.length?Math.max(...times):null;
+  const oldest=times.length?Math.min(...times):null;
+
+  $('badges').innerHTML=
+    `<span>Stations: ${rows.length}</span>`+
+    `<span>WVHT: ${rep.length}</span>`+
+    `<span>Max: ${m2ft(max).toFixed(1)} ft</span>`+
+    `<span>Avg: ${m2ft(avg).toFixed(1)} ft</span>`+
+    `<span class="badgeSmall">Obs: ${fmtLocal(newest)}</span>`+
+    `<span class="badgeSmall">Oldest: ${fmtLocal(oldest)}</span>`;
 }
 
 function periods(){
@@ -204,18 +244,24 @@ function drawGeoJSONLines(geo, stroke){
 
 function drawGraticule(){
   const lonStep=2, latStep=2;
-  ctx.globalAlpha=.18; ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--border').trim()||'#203056'; ctx.lineWidth=1;
+  ctx.globalAlpha=.18;
+  ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--border').trim()||'#203056';
+  ctx.lineWidth=1;
   for(let lon=Math.ceil(VIEW.lonMin/lonStep)*lonStep; lon<=VIEW.lonMax; lon+=lonStep){
     const [x0,y0]=proj(VIEW.latMin,lon), [x1,y1]=proj(VIEW.latMax,lon);
     ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke();
-    ctx.globalAlpha=.75; ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--muted').trim()||'#a7b4db'; ctx.font='11px system-ui';
+    ctx.globalAlpha=.75;
+    ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--muted').trim()||'#a7b4db';
+    ctx.font='11px system-ui';
     ctx.fillText(`${Math.abs(lon)}°W`, x0+4, CH-6);
     ctx.globalAlpha=.18;
   }
   for(let lat=Math.ceil(VIEW.latMin/latStep)*latStep; lat<=VIEW.latMax; lat+=latStep){
     const [x0,y0]=proj(lat,VIEW.lonMin), [x1,y1]=proj(lat,VIEW.lonMax);
     ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke();
-    ctx.globalAlpha=.75; ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--muted').trim()||'#a7b4db'; ctx.font='11px system-ui';
+    ctx.globalAlpha=.75;
+    ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--muted').trim()||'#a7b4db';
+    ctx.font='11px system-ui';
     ctx.fillText(`${lat.toFixed(0)}°N`, 6, y0-4);
     ctx.globalAlpha=.18;
   }
@@ -242,6 +288,27 @@ function draw(){
     ctx.globalAlpha=1; ctx.strokeStyle='#0b1220'; ctx.lineWidth=1.2; ctx.stroke();
   });
 }
+
+// Hover tooltip shows buoy observation time in LOCAL time
+C.addEventListener('mousemove',e=>{
+  if(!rows.length){tip.style.display='none';return;}
+  const r=C.getBoundingClientRect();
+  const mx=(e.clientX-r.left), my=(e.clientY-r.top);
+  let best=null, bd=1e9;
+  for(const p of rows){
+    const [x,y]=proj(p.lat,p.lon);
+    const d=(x-mx)**2+(y-my)**2;
+    if(d<bd){bd=d;best=p;}
+  }
+  if(!best||bd>500){tip.style.display='none';return;}
+  tip.innerHTML=`<b>Station ${best.stn}</b><br>`+
+    `<span class="muted">Obs (local):</span> ${fmtLocal(best.t)}<br>`+
+    `<span class="muted">WVHT:</span> ${best.wvht==null?'—':best.wvht.toFixed(2)} m &nbsp; <span class="muted">DPD:</span> ${best.dpd==null?'—':best.dpd.toFixed(1)} s`;
+  tip.style.left=(e.clientX+12)+'px';
+  tip.style.top=(e.clientY+12)+'px';
+  tip.style.display='block';
+});
+C.addEventListener('mouseleave',()=>tip.style.display='none');
 
 // Theme toggle (Dark <-> Midnight)
 const THEMES=[{k:'dark',label:'Dark'},{k:'midnight',label:'Midnight'}];
