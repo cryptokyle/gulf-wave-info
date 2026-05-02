@@ -29,15 +29,13 @@
     .sw{display:inline-flex;align-items:center;gap:6px}
     .sw i{display:inline-block;width:10px;height:10px;border-radius:3px;border:1px solid var(--border)}
 
-    /* Drawer */
-    .drawerWrap{position:fixed;top:90px;right:0;z-index:20;display:flex}
-    .drawerTab{writing-mode:vertical-rl;transform:rotate(180deg);padding:10px 12px;border-radius:12px 0 0 12px;background:#13214a;border:1px solid var(--border);border-right:none;cursor:pointer;font-weight:600}
-    .drawer{width:56px;transition:width .2s ease;overflow:hidden;background:var(--panel);border:1px solid var(--border);border-right:none;border-radius:18px 0 0 18px}
-    .drawer.open{width:360px}
+    /* Drawer (now collapses to ONLY the tab) */
+    .drawerWrap{position:fixed;top:90px;right:0;z-index:20;display:flex;align-items:flex-start}
+    .drawerTab{writing-mode:vertical-rl;transform:rotate(180deg);padding:10px 12px;border-radius:12px 0 0 12px;background:#13214a;border:1px solid var(--border);cursor:pointer;font-weight:600;user-select:none;box-shadow:0 8px 30px rgba(0,0,0,.25)}
+    .drawer{width:0;overflow:hidden;transition:width .2s ease;background:transparent;border:0;pointer-events:none}
+    .drawer.open{width:360px;background:var(--panel);border:1px solid var(--border);border-right:none;border-radius:18px 0 0 18px;pointer-events:auto}
     .drawerInner{padding:12px;min-width:340px}
     .drawer:not(.open) .hide{display:none}
-
-    .tooltip{position:fixed;display:none;max-width:360px;padding:10px 12px;border-radius:14px;background:var(--panel);border:1px solid var(--border);font-size:12px;pointer-events:none;z-index:30}
   </style>
 </head>
 <body>
@@ -59,22 +57,30 @@
   </section>
 </main>
 
-<div class="drawerWrap"><div class="drawerTab" id="drawerTab">Controls ▸</div><div class="drawer" id="drawer"><div class="drawerInner"><div style="font-weight:700">Controls</div><div class="muted">Optional station filter</div><div class="row" style="margin-top:6px"><input id="stations" placeholder="Station IDs" style="flex:1"/><button class="secondary" id="clear">Clear</button></div><div class="hide" style="margin-top:12px"><textarea id="t" placeholder="# Paste latest_obs.txt here"></textarea><div class="row" style="justify-content:flex-end;margin-top:6px"><button class="secondary" id="parse">Parse Paste</button></div></div></div></div></div>
-<div class="tooltip" id="tip"></div>
+<div class="drawerWrap">
+  <div class="drawerTab" id="drawerTab">Controls ▸</div>
+  <div class="drawer" id="drawer"><div class="drawerInner">
+    <div style="font-weight:700">Controls</div>
+    <div class="muted">Optional station filter</div>
+    <div class="row" style="margin-top:6px"><input id="stations" placeholder="Station IDs" style="flex:1"/><button class="secondary" id="clear">Clear</button></div>
+    <div class="hide" style="margin-top:12px"><textarea id="t" placeholder="# Paste latest_obs.txt here"></textarea><div class="row" style="justify-content:flex-end;margin-top:6px"><button class="secondary" id="parse">Parse Paste</button></div></div>
+  </div></div>
+</div>
 
 <script>
 const PROXY_URL='/.netlify/functions/ndbc-latest',B={minLat:18,maxLat:31.5,minLon:-98,maxLon:-80},$=id=>document.getElementById(id),C=$('c'),ctx=C.getContext('2d');
 let rows=[];
 const miss=v=>v==null||v===''||v==='MM',num=v=>miss(v)?null:+v,m2ft=m=>m==null?null:m*3.28084;
 
-// "Map style" basemap: fill land masses (rough polygons) + coastlines (still super lightweight, no external tiles)
-const LAND=[
-  // US Gulf coast / Florida (rough)
-  [[31.5,-98],[31.5,-80],[30.8,-81.5],[30.4,-83],[30.1,-85],[30.3,-87.2],[30.35,-88.1],[29.9,-90.1],[29.2,-92.1],[28.9,-94.1],[28.5,-95.2],[27.9,-96.4],[26.8,-97.3],[31.5,-98]],
-  // Mexico + Yucatan (rough)
-  [[18,-98],[25.4,-97.8],[22.9,-96.5],[20.6,-94.7],[18.8,-92.2],[18.2,-89.3],[18.3,-88.3],[18,-98]],
-  // Cuba (rough)
-  [[23.3,-85.6],[22.6,-84.6],[21.6,-83.7],[20.5,-82.6],[19.4,-81.6],[21.5,-81.5],[22.8,-82.5],[23.3,-85.6]],
+// Improved "map-like" basemap: better coastline polylines, still lightweight (no external tiles)
+const COAST_US=[
+  [31.0,-80.9],[30.8,-81.5],[30.6,-82.2],[30.4,-83.0],[30.2,-83.8],[29.9,-84.6],[29.6,-85.2],[29.9,-85.9],[30.1,-86.5],[30.3,-87.2],[30.4,-87.8],[30.4,-88.3],[30.2,-88.9],[29.9,-89.5],[29.6,-90.2],[29.3,-90.9],[29.2,-91.6],[29.1,-92.3],[29.1,-93.0],[29.3,-93.6],[29.4,-94.3],[29.3,-95.0],[28.9,-95.7],[28.3,-96.4],[27.7,-96.9],[27.0,-97.2],[26.4,-97.3],[26.0,-97.2]
+];
+const COAST_MX=[
+  [26.0,-97.2],[25.3,-97.1],[24.4,-96.7],[23.5,-96.3],[22.6,-95.8],[21.6,-95.3],[20.7,-94.9],[19.9,-94.4],[19.4,-93.6],[19.0,-92.7],[18.6,-91.8],[18.4,-90.9],[18.3,-90.1],[18.2,-89.3],[18.3,-88.6],[18.6,-87.9],[19.1,-87.1],[19.7,-86.3],[20.3,-85.6],[21.0,-84.9],[21.7,-84.2],[22.5,-83.5]
+];
+const COAST_CUBA=[
+  [23.2,-85.3],[22.8,-84.7],[22.3,-84.1],[21.8,-83.5],[21.2,-82.9],[20.6,-82.3],[20.1,-81.8],[19.8,-81.6],[20.5,-81.6],[21.1,-81.7],[21.8,-82.1],[22.4,-82.7],[23.0,-83.6],[23.2,-84.5],[23.2,-85.3]
 ];
 
 function proj(lat,lon){return[(lon-B.minLon)/(B.maxLon-B.minLon)*C.width,(1-(lat-B.minLat)/(B.maxLat-B.minLat))*C.height];}
@@ -82,7 +88,7 @@ function proj(lat,lon){return[(lon-B.minLon)/(B.maxLon-B.minLon)*C.width,(1-(lat
 function parseObs(txt){
   const set=new Set(($('stations').value||'').split(/[\s,]+/).filter(Boolean));
   rows=txt.split(/\r?\n/).filter(l=>l&&!l.startsWith('#')).map(l=>l.split(/\s+/)).map(f=>({
-    stn:f[0],lat:num(f[1]),lon:num(f[2]),wvht:num(f[11]),dpd:num(f[12]),wdir:num(f[14]),wtmp:num(f[18])
+    stn:f[0],lat:num(f[1]),lon:num(f[2]),wvht:num(f[11]),dpd:num(f[12])
   })).filter(p=>p.lat>=B.minLat&&p.lat<=B.maxLat&&p.lon>=B.minLon&&p.lon<=B.maxLon)
     .filter(p=>!set.size||set.has(p.stn));
   draw(); badges(); periods();
@@ -94,17 +100,11 @@ function badges(){
   $('badges').innerHTML=`<span>Stations: ${rows.length}</span><span>WVHT: ${rep.length}</span><span>Max: ${m2ft(max).toFixed(1)} ft</span><span>Avg: ${m2ft(avg).toFixed(1)} ft</span>`;
 }
 
-function pColor(s){
-  if(s<6) return '#60a5fa';     // <6s blue
-  if(s<8) return '#34d399';     // 6–8 green
-  if(s<10) return '#fbbf24';    // 8–10 yellow
-  if(s<12) return '#fb7185';    // 10–12 pink
-  return '#a78bfa';             // 12+ purple
-}
+function pColor(s){return s<6?'#60a5fa':s<8?'#34d399':s<10?'#fbbf24':s<12?'#fb7185':'#a78bfa';}
 
 function periods(){
   const out=[];
-  for(let lon=B.minLon;lon<B.maxLon;lon+=0.36){ // ~25 miles
+  for(let lon=B.minLon;lon<B.maxLon;lon+=0.36){
     const seg=rows.filter(r=>r.dpd!=null&&r.lon>=lon&&r.lon<lon+0.36);
     if(!seg.length) continue;
     const avg=seg.reduce((a,r)=>a+r.dpd,0)/seg.length;
@@ -119,31 +119,60 @@ function periods(){
     `<span class="sw"><i style="background:#a78bfa"></i>12s+</span>`;
 }
 
-function poly(points,fill,stroke){
-  ctx.beginPath();
-  points.forEach((p,i)=>{const[x,y]=proj(p[0],p[1]);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
-  if(fill){ctx.fillStyle=fill;ctx.fill();}
-  if(stroke){ctx.strokeStyle=stroke;ctx.stroke();}
+function strokeLine(line,color,w){
+  ctx.strokeStyle=color; ctx.lineWidth=w; ctx.beginPath();
+  line.forEach((p,i)=>{const[x,y]=proj(p[0],p[1]);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
+  ctx.stroke();
+}
+
+function fillLand(){
+  // Fill land north of US coastline using top boundary + coastline
+  ctx.fillStyle='#0c1b3a'; ctx.beginPath();
+  // top boundary
+  let [x0,y0]=proj(B.maxLat,B.minLon); ctx.moveTo(x0,y0);
+  let [x1,y1]=proj(B.maxLat,B.maxLon); ctx.lineTo(x1,y1);
+  // down right edge to start of coast
+  const usStart=COAST_US[0]; const [xs,ys]=proj(usStart[0],usStart[1]); ctx.lineTo(xs,ys);
+  // follow coastline backwards (east->west) to close
+  for(let i=0;i<COAST_US.length;i++){const p=COAST_US[i];const [x,y]=proj(p[0],p[1]);ctx.lineTo(x,y)}
+  // back to top-left
+  const [xl,yl]=proj(B.maxLat,B.minLon); ctx.lineTo(xl,yl);
+  ctx.closePath(); ctx.fill();
+
+  // Mexico/Yucatan land (fill south/west of MX coastline)
+  ctx.fillStyle='#0c1b3a'; ctx.beginPath();
+  const [a,b]=proj(B.minLat,B.minLon); ctx.moveTo(a,b);
+  const mxStart=COAST_MX[0]; const [mxs,mys]=proj(mxStart[0],mxStart[1]); ctx.lineTo(mxs,mys);
+  COAST_MX.forEach(p=>{const[x,y]=proj(p[0],p[1]);ctx.lineTo(x,y)});
+  const [c,d]=proj(B.minLat,B.maxLon); ctx.lineTo(c,d);
+  const [e,f]=proj(B.minLat,B.minLon); ctx.lineTo(e,f);
+  ctx.closePath(); ctx.fill();
+
+  // Cuba island fill
+  ctx.fillStyle='#0c1b3a'; ctx.beginPath();
+  COAST_CUBA.forEach((p,i)=>{const[x,y]=proj(p[0],p[1]);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
+  ctx.closePath(); ctx.fill();
 }
 
 function draw(){
-  // ocean background
   ctx.clearRect(0,0,C.width,C.height);
   const g=ctx.createLinearGradient(0,0,0,C.height);
   g.addColorStop(0,'#06102a'); g.addColorStop(1,'#071a36');
   ctx.fillStyle=g; ctx.fillRect(0,0,C.width,C.height);
 
   // subtle grid
-  ctx.globalAlpha=.18; ctx.strokeStyle='#203056';
+  ctx.globalAlpha=.12; ctx.strokeStyle='#203056';
   for(let i=1;i<6;i++){
     ctx.beginPath();ctx.moveTo(i*C.width/6,0);ctx.lineTo(i*C.width/6,C.height);ctx.stroke();
     ctx.beginPath();ctx.moveTo(0,i*C.height/6);ctx.lineTo(C.width,i*C.height/6);ctx.stroke();
   }
   ctx.globalAlpha=1;
 
-  // land masses
-  ctx.lineWidth=1.5;
-  LAND.forEach(p=>poly(p,'#0c1b3a','#2b4a73'));
+  // land fill + coastlines
+  fillLand();
+  strokeLine(COAST_US,'#2b4a73',2);
+  strokeLine(COAST_MX,'#2b4a73',2);
+  strokeLine(COAST_CUBA,'#2b4a73',2);
 
   // buoy dots
   rows.forEach(p=>{
