@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Gulf Wave Buoy Viewer</title>
+  <style>
+    body{font:14px/1.35 system-ui;margin:0;background:#0b1220;color:#e8eefc}
+    header,main{max-width:980px;margin:auto;padding:14px}
+    header{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+    input,button,textarea,select{font:inherit;border:1px solid #2a3a64;border-radius:10px;background:#0f1a33;color:#e8eefc;padding:8px 10px}
+    button{cursor:pointer;background:#1677ff;border-color:#1677ff}
+    button.secondary{background:#0f1a33}
+    textarea{width:100%;min-height:150px;resize:vertical}
+    .row{display:flex;gap:10px;flex-wrap:wrap}
+    .card{background:#0f1a33;border:1px solid #203056;border-radius:16px;padding:12px}
+    .grid{display:grid;grid-template-columns:1.4fr .9fr;gap:12px}
+    @media (max-width:900px){.grid{grid-template-columns:1fr}}
+    canvas{width:100%;height:520px;background:#06102a;border-radius:16px;border:1px solid #203056}
+    .muted{color:#a7b4db}
+    .badges span{display:inline-block;margin:4px 6px 0 0;padding:4px 8px;border-radius:999px;background:#13214a;border:1px solid #203056;color:#cfe0ff}
+    .tip{font-size:12px;color:#a7b4db}
+    code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+    a{color:#7fb2ff}
+  </style>
+</head>
+
+<body>
+<header>
+  <div>
+    <div style="font-weight:700;font-size:18px">Gulf of Mexico — Wave Snapshot</div>
+    <div class="muted">
+      Paste NOAA NDBC <code>latest_obs.txt</code> (manual) or load via your serverless proxy.
+    </div>
+  </div>
+  <div class="row">
+    <select id="units">
+      <option value="imperial" selected>Imperial</option>
+      <option value="metric">Metric</option>
+    </select>
+    <button id="parse">Parse Paste</button>
+    <button class="secondary" id="proxy">Load Live</button>
+  </div>
+</header>
+
+<main class="grid">
+  <section class="card">
+    <div class="row" style="align-items:end;justify-content:space-between">
+      <div>
+        <div style="font-weight:600">Map</div>
+        <div class="tip">
+          Dot size ≈ wave height. Hover for details. Gulf bounds: 18–31.5°N, 98–80°W.
+        </div>
+      </div>
+      <div class="badges" id="badges"></div>
+    </div>
+
+    <canvas id="c" width="980" height="520"></canvas>
+
+    <div class="tip">
+      Live mode calls your serverless proxy (recommended). NDBC’s “latest obs” file is rebuilt frequently (~every 5 minutes). 【1-dd1a8e】
+    </div>
+  </section>
+
+  <aside class="card">
+    <div style="font-weight:600">Controls</div>
+    <div class="tip">
+      Optional station filter: comma/space IDs like <code>42012 42040 42039</code>.
+      Leave blank to show all within Gulf bounds.
+    </div>
+
+    <div class="row" style="margin:8px 0 10px">
+      <input id="stations" placeholder="Station IDs (optional)" style="flex:1"/>
+      <button class="secondary" id="clear">Clear</button>
+    </div>
+
+    <div class="tip">
+      Manual paste source:
+      <code>https://www.ndbc.noaa.gov/data/latest_obs/latest_obs.txt</code> 【1-dd1a8e】
+    </div>
+
+    <textarea id="t" placeholder="#STN LAT LON YYYY MM DD hh mm WDIR WSPD GST WVHT DPD APD MWD ...
+42012 30.060 -87.548 2026 04 29 03 00 150 6.0 7.0 0.6 8 5.6 145 ..."></textarea>
+
+    <div class="tip">
+      “Reporting waves” = WVHT present (not <code>MM</code>). Fields WVHT/DPD/APD/MWD + WDIR/WSPD/GST are standard NDBC outputs. 【2-a11818】【3-f3386c】
+    </div>
+  </aside>
+</main>
+
+<script>
+/**
+ * Gulf Wave Buoy Viewer (vanilla JS)
+ * - Parses NOAA NDBC latest_obs.txt (space-delimited; header/comment lines start with "#")
+ * - Visualizes stations within Gulf bounds
+ * - Dot radius scales with WVHT
+ *
+ * IMPORTANT: Set PROXY_URL based on your host:
+ * - Netlify Functions: "/.netlify/functions/ndbc-latest"
+ * - Vercel Function:   "/api/ndbc-latest" (if you create that route)
+ */
+const PROXY_URL = "/.netlify/functions/ndbc-latest";
+
+const BOUNDS = { minLat: 18, maxLat: 31.5, minLon: -98, maxLon: -80 };
+const $ = (id) => document.getElementById(id);
+const C = $("c");
+const ctx = C.getContext("2d");
+
+let rows = [];
+
+const isMissing = (v) => v == null || v === "" || v === "MM";
+const toNum = (v) => (isMissing(v) ? null : Number(v));
+const mToFt = (m) => (m == null ? null : m * 3.28084);
+const msToKt = (ms) => (ms == null ? null : ms * 1.94384);
+const cToF = (c) => (c == null ? null : (c * 9 / 5) + 32);
+
+function parseLatestObs(txt) {
+  const filterSet = new Set(
+    ($("stations").value || "")
+      .split(/[\s,]+/)
+      .map(s => s.trim())
+      .filter(Boolean)
+  );
+
+  // keep only non-comment lines
+  const dataLines = txt
+    .split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(l => l && !l.startsWith("#"));
+
+  rows = dataLines
+    .map(line => line.split(/\s+/))
+    .map(f => ({
+      stn: f[0],
+      lat: toNum(f[1]),
+      lon: toNum(f[2]),
+      time: `${f[3]}-${f[4]}-${f[5]} ${f[6]}:${f[7]} UTC`,
+      wdir: toNum(f[8]),
+      wspd: toNum(f[9]),
+      gst:  toNum(f[10]),
+      wvht: toNum(f[11]),
+      dpd:  toNum(f[12]),
+      apd:  toNum(f[13]),
+      mwd:  toNum(f[14]),
+      atmp: toNum(f[17]),
+      wtmp: toNum(f[18]),
+    }))
+    .filter(p =>
+      p.lat != null &&
+      p.lon != null &&
+      p.lat >= BOUNDS.minLat && p.lat <= BOUNDS.maxLat &&
+      p.lon >= BOUNDS.minLon && p.lon <= BOUNDS.maxLon
+    )
+    .filter(p => !filterSet.size || filterSet.has(p.stn));
+
+  draw();
+  renderBadges();
+}
+
+function renderBadges() {
+  const u = $("units").value;
+  const reporting = rows.filter(r => r.wvht != null);
+  const max = reporting.length ? Math.max(...reporting.map(r => r.wvht)) : null;
+  const avg = reporting.length ? (reporting.reduce((a,r) => a + r.wvht, 0) / reporting.length) : null;
+
+  const maxD = u === "imperial" ? mToFt(max) : max;
+  const avgD = u === "imperial" ? mToFt(avg) : avg;
+  const unit = u === "imperial" ? "ft" : "m";
+
+  $("badges").innerHTML =
+    `<span>Stations: ${rows.length}</span>` +
+    `<span>WVHT: ${reporting.length}</span>` +
+    `<span>Max: ${maxD == null ? "—" : maxD.toFixed(1)} ${unit}</span>` +
+    `<span>Avg: ${avgD == null ? "—" : avgD.toFixed(1)} ${unit}</span>`;
+}
+
+function project(lat, lon) {
+  const x = ((lon - BOUNDS.minLon) / (BOUNDS.maxLon - BOUNDS.minLon)) * C.width;
+  const y = (1 - ((lat - BOUNDS.minLat) / (BOUNDS.maxLat - BOUNDS.minLat))) * C.height;
+  return [x, y];
+}
+
+function draw() {
+  ctx.clearRect(0, 0, C.width, C.height);
+
+  // grid
+  ctx.globalAlpha = 0.5;
+  ctx.strokeStyle = "#203056";
+  for (let i = 1; i < 6; i++) {
+    ctx.beginPath();
+    ctx.moveTo((i * C.width) / 6, 0);
+    ctx.lineTo((i * C.width) / 6, C.height);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(0, (i * C.height) / 6);
+    ctx.lineTo(C.width, (i * C.height) / 6);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  // points
+  for (const p of rows) {
+    const [x, y] = project(p.lat, p.lon);
+    const r = Math.max(3, Math.min(18, (p.wvht ?? 0) * 6)); // scale meters -> radius
+    ctx.beginPath();
+    ctx.fillStyle = "#0ea5e9";
+    ctx.strokeStyle = "#0284c7";
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+}
+
+// tooltip
+const tip = document.createElement("div");
+tip.style.cssText = [
+  "position:fixed",
+  "display:none",
+  "max-width:340px",
+  "padding:10px 12px",
+  "border-radius:14px",
+  "background:#0f1a33",
+  "border:1px solid #203056",
+  "color:#e8eefc",
+  "box-shadow:0 8px 30px rgba(0,0,0,.35)",
+  "font-size:12px",
+  "z-index:9",
+  "pointer-events:none"
+].join(";");
+document.body.appendChild(tip);
+
+C.addEventListener("mousemove", (e) => {
+  if (!rows.length) return;
+
+  const rect = C.getBoundingClientRect();
+  const mx = ((e.clientX - rect.left) * C.width) / rect.width;
+  const my = ((e.clientY - rect.top) * C.height) / rect.height;
+
+  let best = null;
+  let bestD = Infinity;
+
+  for (const p of rows) {
+    const [x, y] = project(p.lat, p.lon);
+    const d = (x - mx) ** 2 + (y - my) ** 2;
+    if (d < bestD) { bestD = d; best = p; }
+  }
+
+  if (!best || bestD > 500) { tip.style.display = "none"; return; }
+
+  const u = $("units").value;
+
+  const wh = u === "imperial" ? mToFt(best.wvht) : best.wvht;
+  const ws = u === "imperial" ? msToKt(best.wspd) : best.wspd;
+  const wt = u === "imperial" ? cToF(best.wtmp) : best.wtmp;
+  const at = u === "imperial" ? cToF(best.atmp) : best.atmp;
+
+  tip.innerHTML =
+    `<b>Station ${best.stn}</b> <span style="float:right;opacity:.75">${best.time}</span><br>` +
+    `Wave: <b>${wh == null ? "—" : wh.toFixed(1)}</b> ${u === "imperial" ? "ft" : "m"} | ` +
+    `Period: <b>${best.dpd ?? "—"}</b>s dom, <b>${best.apd ?? "—"}</b>s avg<br>` +
+    `Dir: <b>${best.mwd ?? "—"}</b>° | Wind: <b>${ws == null ? "—" : ws.toFixed(1)}</b> ${u === "imperial" ? "kt" : "m/s"} @ <b>${best.wdir ?? "—"}</b>°<br>` +
+    `Water: <b>${wt == null ? "—" : wt.toFixed(1)}</b>°${u === "imperial" ? "F" : "C"} | ` +
+    `Air: <b>${at == null ? "—" : at.toFixed(1)}</b>°${u === "imperial" ? "F" : "C"}`;
+
+  tip.style.left = (e.clientX + 12) + "px";
+  tip.style.top  = (e.clientY + 12) + "px";
+  tip.style.display = "block";
+});
+
+C.addEventListener("mouseleave", () => tip.style.display = "none");
+
+// wiring
+$("parse").onclick = () => parseLatestObs($("t").value);
+
+$("proxy").onclick = async () => {
+  const r = await fetch(PROXY_URL, { cache: "no-store" });
+  if (!r.ok) {
+    alert("Proxy fetch failed: HTTP " + r.status);
+    return;
+  }
+  const txt = await r.text();
+  parseLatestObs(txt);
+};
+
+$("clear").onclick = () => {
+  $("t").value = "";
+  $("stations").value = "";
+  rows = [];
+  ctx.clearRect(0, 0, C.width, C.height);
+  $("badges").innerHTML = "";
+};
+
+$("units").onchange = () => {
+  if (!rows.length) return;
+  draw();
+  renderBadges();
+};
+</script>
+
+</body>
+</html>
