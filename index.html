@@ -1,39 +1,42 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Gulf of Mexico</title>
   <style>
+    /* Theme tokens */
     :root{--bg:#0b1220;--panel:#0f1a33;--panel2:#06102a;--border:#203056;--border2:#2a3a64;--text:#e8eefc;--muted:#a7b4db;--accent:#1677ff}
-    html,body{height:100%;overflow:hidden}
-    body{font:14px/1.35 system-ui;margin:0;background:var(--bg);color:var(--text);display:flex;flex-direction:column}
+    html[data-theme="midnight"]{--bg:#050814;--panel:#0a1026;--panel2:#03081a;--border:#1b2a4a;--border2:#22335a;--text:#f0f4ff;--muted:#9fb0d9;--accent:#3b82f6}
 
-    /* Full-width header + main (no max-width cap) */
-    header{width:100%;padding:14px 18px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;flex:0 0 auto;box-sizing:border-box}
-    main{width:100%;padding:0 18px 18px;flex:1 1 auto;min-height:0;box-sizing:border-box}
+    html,body{height:100%;overflow:hidden;background:var(--bg)}
+    body{font:14px/1.35 system-ui;margin:0;color:var(--text);display:flex;flex-direction:column}
+
+    /* ULTRA edge-to-edge */
+    header{width:100%;padding:6px 6px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;flex:0 0 auto;box-sizing:border-box}
+    main{width:100%;padding:0 6px 6px;flex:1 1 auto;min-height:0;box-sizing:border-box}
 
     .title{font-weight:800;font-size:20px;justify-self:center}
-    .actions{justify-self:end;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .actions{justify-self:end;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 
     button,select,input,textarea{font:inherit;border-radius:12px;border:1px solid var(--border2);background:var(--panel);color:var(--text);padding:8px 10px}
     button{cursor:pointer;background:var(--accent);border-color:var(--accent)}
     button.secondary{background:var(--panel);border-color:var(--border2)}
 
-    .card{background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:12px;height:100%;display:flex;flex-direction:column;min-height:0}
+    /* Tighten card + canvas so the map nearly touches screen edges */
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:6px;height:100%;display:flex;flex-direction:column;min-height:0}
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 
-    /* Map area fills remaining height without page scroll */
     .mapWrap{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
-    canvas{width:100%;height:100%;min-height:0;background:var(--panel2);border-radius:18px;border:1px solid var(--border)}
+    canvas{width:100%;height:100%;min-height:0;background:var(--panel2);border-radius:8px;border:1px solid var(--border)}
 
     .badges{display:flex;gap:8px;flex-wrap:wrap}
-    .badges span{padding:4px 10px;border-radius:999px;background:#13214a;border:1px solid var(--border)}
+    .badges span{padding:4px 10px;border-radius:999px;background:color-mix(in oklab, var(--panel) 40%, #13214a);border:1px solid var(--border)}
 
-    .below{flex:0 0 auto;margin-top:10px}
+    .below{flex:0 0 auto;margin-top:6px}
     .periodTitle{font-weight:800;margin-bottom:6px}
 
-    /* Keep bottom section from increasing page height: horizontal scroll inside */
+    /* no vertical scroll: bins scroll horizontally inside */
     .periodBar{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;white-space:nowrap;padding-bottom:6px;-webkit-overflow-scrolling:touch}
     .bin{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid var(--border);font-weight:800;color:#06102a;flex:0 0 auto}
 
@@ -41,13 +44,12 @@
     .sw{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto}
     .sw i{display:inline-block;width:10px;height:10px;border-radius:3px;border:1px solid var(--border)}
 
-    .muted{color:var(--muted)}
-
     /* Drawer collapses to ONLY the tab */
-    .drawerWrap{position:fixed;top:90px;right:0;z-index:20;display:flex;align-items:flex-start}
+    .drawerWrap{position:fixed;top:62px;right:0;z-index:20;display:flex;align-items:flex-start}
     .drawerTab{writing-mode:vertical-rl;transform:rotate(180deg);padding:10px 12px;border-radius:12px 0 0 12px;background:#13214a;border:1px solid var(--border);cursor:pointer;font-weight:700;user-select:none;box-shadow:0 8px 30px rgba(0,0,0,.25)}
+    html[data-theme="midnight"] .drawerTab{background:#101a3a}
     .drawer{width:0;overflow:hidden;transition:width .2s ease;background:transparent;border:0;pointer-events:none}
-    .drawer.open{width:360px;background:var(--panel);border:1px solid var(--border);border-right:none;border-radius:18px 0 0 18px;pointer-events:auto}
+    .drawer.open{width:360px;background:var(--panel);border:1px solid var(--border);border-right:none;border-radius:10px 0 0 10px;pointer-events:auto}
     .drawerInner{padding:12px;min-width:340px}
     .drawer:not(.open) .hide{display:none}
 
@@ -59,6 +61,7 @@
   <div></div>
   <div class="title">Gulf of Mexico</div>
   <div class="actions">
+    <button id="theme" class="secondary" title="Toggle theme">Dark</button>
     <select id="units"><option value="imperial" selected>Imperial</option><option value="metric">Metric</option></select>
     <button id="live">Load Live</button>
   </div>
@@ -85,7 +88,7 @@
   <div class="drawerTab" id="drawerTab">Controls ▸</div>
   <div class="drawer" id="drawer"><div class="drawerInner">
     <div style="font-weight:800">Controls</div>
-    <div class="muted">Optional station filter</div>
+    <div style="color:var(--muted);font-size:12px">Optional station filter</div>
     <div class="row" style="margin-top:6px"><input id="stations" placeholder="Station IDs" style="flex:1"/><button class="secondary" id="clear">Clear</button></div>
     <div class="hide" style="margin-top:12px"><textarea id="t" placeholder="# Paste latest_obs.txt here"></textarea><div class="row" style="justify-content:flex-end;margin-top:6px"><button class="secondary" id="parse">Parse Paste</button></div></div>
   </div></div>
@@ -97,7 +100,6 @@ const $=id=>document.getElementById(id);
 const C=$('c'),ctx=C.getContext('2d');
 let rows=[], CW=800, CH=500;
 
-// Fixed lon span; lat span auto-expands to match canvas aspect so there is no distortion.
 const LON_MIN=-98, LON_MAX=-80;
 const LAT_MIN_BASE=18, LAT_MAX_BASE=31.5;
 let VIEW={lonMin:LON_MIN, lonMax:LON_MAX, latMin:LAT_MIN_BASE, latMax:LAT_MAX_BASE, cos:Math.cos(((LAT_MIN_BASE+LAT_MAX_BASE)/2)*Math.PI/180)};
@@ -202,18 +204,18 @@ function drawGeoJSONLines(geo, stroke){
 
 function drawGraticule(){
   const lonStep=2, latStep=2;
-  ctx.globalAlpha=.18; ctx.strokeStyle='#203056'; ctx.lineWidth=1;
+  ctx.globalAlpha=.18; ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--border').trim()||'#203056'; ctx.lineWidth=1;
   for(let lon=Math.ceil(VIEW.lonMin/lonStep)*lonStep; lon<=VIEW.lonMax; lon+=lonStep){
     const [x0,y0]=proj(VIEW.latMin,lon), [x1,y1]=proj(VIEW.latMax,lon);
     ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke();
-    ctx.globalAlpha=.75; ctx.fillStyle='#a7b4db'; ctx.font='11px system-ui';
+    ctx.globalAlpha=.75; ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--muted').trim()||'#a7b4db'; ctx.font='11px system-ui';
     ctx.fillText(`${Math.abs(lon)}°W`, x0+4, CH-6);
     ctx.globalAlpha=.18;
   }
   for(let lat=Math.ceil(VIEW.latMin/latStep)*latStep; lat<=VIEW.latMax; lat+=latStep){
     const [x0,y0]=proj(lat,VIEW.lonMin), [x1,y1]=proj(lat,VIEW.lonMax);
     ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke();
-    ctx.globalAlpha=.75; ctx.fillStyle='#a7b4db'; ctx.font='11px system-ui';
+    ctx.globalAlpha=.75; ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--muted').trim()||'#a7b4db'; ctx.font='11px system-ui';
     ctx.fillText(`${lat.toFixed(0)}°N`, 6, y0-4);
     ctx.globalAlpha=.18;
   }
@@ -221,20 +223,16 @@ function drawGraticule(){
 }
 
 function draw(){
-  // ocean
   ctx.clearRect(0,0,CW,CH);
-  const g=ctx.createLinearGradient(0,0,0,CH);
-  g.addColorStop(0,'#06102a'); g.addColorStop(1,'#071a36');
-  ctx.fillStyle=g; ctx.fillRect(0,0,CW,CH);
+  const grad=ctx.createLinearGradient(0,0,0,CH);
+  grad.addColorStop(0,getComputedStyle(document.documentElement).getPropertyValue('--panel2').trim()||'#06102a');
+  grad.addColorStop(1,'#071a36');
+  ctx.fillStyle=grad; ctx.fillRect(0,0,CW,CH);
 
-  // basemap
   if(LAND_GEOJSON) drawGeoJSONPolys(LAND_GEOJSON,'#0c1b3a','#2b4a73');
   if(BORDERS_GEOJSON) drawGeoJSONLines(BORDERS_GEOJSON,'#355f91');
-
-  // gridlines + labels
   drawGraticule();
 
-  // buoys (color by period, size by wave height)
   rows.forEach(p=>{
     const [x,y]=proj(p.lat,p.lon);
     const r=Math.max(2.5,Math.min(18,(p.wvht||0)*6));
@@ -244,6 +242,13 @@ function draw(){
     ctx.globalAlpha=1; ctx.strokeStyle='#0b1220'; ctx.lineWidth=1.2; ctx.stroke();
   });
 }
+
+// Theme toggle (Dark <-> Midnight)
+const THEMES=[{k:'dark',label:'Dark'},{k:'midnight',label:'Midnight'}];
+let theme=localStorage.getItem('theme')||'dark';
+function setTheme(t){theme=t;document.documentElement.dataset.theme=t;localStorage.setItem('theme',t);$('theme').textContent=THEMES.find(x=>x.k===t)?.label||'Theme';draw();}
+$('theme').onclick=()=>setTheme(theme==='dark'?'midnight':'dark');
+setTheme(theme);
 
 $('live').onclick=async()=>{const r=await fetch(PROXY_URL);if(!r.ok)return alert('Fetch failed');parseObs(await r.text())};
 $('parse').onclick=()=>parseObs($('t').value);
