@@ -16,7 +16,7 @@ export default async () => {
     const txt = await r.text();
 
     // Be polite to NDBC: cache a little so many users don't hammer them.
-    // NDBC asks consumers to limit retrievals to a minimal level. 【5-4221dd】
+    // NDBC asks consumers to limit retrievals to a minimal level.
     return new Response(txt, {
       status: 200,
       headers: {
