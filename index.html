@@ -7,39 +7,49 @@
   <title>Gulf of Mexico</title>
   <style>
     :root{--bg:#0b1220;--panel:#0f1a33;--panel2:#06102a;--border:#203056;--border2:#2a3a64;--text:#e8eefc;--muted:#a7b4db;--accent:#1677ff}
-    html,body{height:100%}
-    body{font:14px/1.35 system-ui;margin:0;background:var(--bg);color:var(--text)}
-    header,main{max-width:1100px;margin:auto;padding:14px}
-    header{display:flex;align-items:center;justify-content:space-between}
+    html,body{height:100%;overflow:hidden}
+    body{font:14px/1.35 system-ui;margin:0;background:var(--bg);color:var(--text);display:flex;flex-direction:column}
+
+    header{max-width:1100px;width:100%;margin:0 auto;padding:14px;display:flex;align-items:center;justify-content:space-between;flex:0 0 auto}
+    main{max-width:1100px;width:100%;margin:0 auto;padding:0 14px 14px;flex:1 1 auto;min-height:0}
+
     .title{font-weight:800;font-size:20px}
     button,select,input,textarea{font:inherit;border-radius:12px;border:1px solid var(--border2);background:var(--panel);color:var(--text);padding:8px 10px}
     button{cursor:pointer;background:var(--accent);border-color:var(--accent)}
     button.secondary{background:var(--panel);border-color:var(--border2)}
-    .card{background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:12px}
 
-    /* Make the map fill the viewport vertically (while keeping the header + period bands visible). */
-    canvas{width:100%;height:calc(100vh - 210px);min-height:520px;max-height:820px;background:var(--panel2);border-radius:18px;border:1px solid var(--border)}
-    @media (max-height:760px){canvas{height:calc(100vh - 185px);min-height:440px}}
-
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:12px;height:100%;display:flex;flex-direction:column;min-height:0}
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+    /* Map area fills remaining height without page scroll */
+    .mapWrap{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+    canvas{width:100%;height:100%;min-height:0;background:var(--panel2);border-radius:18px;border:1px solid var(--border)}
+
     .badges{display:flex;gap:8px;flex-wrap:wrap}
     .badges span{padding:4px 10px;border-radius:999px;background:#13214a;border:1px solid var(--border)}
-    .muted{color:var(--muted)}
-    .below{margin-top:10px}
 
-    .periodBar{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
-    .bin{padding:4px 10px;border-radius:999px;border:1px solid var(--border);font-weight:700;color:#06102a}
-    .legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:12px;color:var(--muted)}
-    .sw{display:inline-flex;align-items:center;gap:6px}
+    .below{flex:0 0 auto;margin-top:10px}
+    .periodTitle{font-weight:800;margin-bottom:6px}
+
+    /* Keep bottom section from increasing page height: horizontal scroll inside */
+    .periodBar{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;white-space:nowrap;padding-bottom:6px;-webkit-overflow-scrolling:touch}
+    .bin{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid var(--border);font-weight:800;color:#06102a;flex:0 0 auto}
+
+    .legend{display:flex;gap:10px;flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;font-size:12px;color:var(--muted);padding-bottom:2px}
+    .sw{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto}
     .sw i{display:inline-block;width:10px;height:10px;border-radius:3px;border:1px solid var(--border)}
+
+    .muted{color:var(--muted)}
 
     /* Drawer collapses to ONLY the tab */
     .drawerWrap{position:fixed;top:90px;right:0;z-index:20;display:flex;align-items:flex-start}
-    .drawerTab{writing-mode:vertical-rl;transform:rotate(180deg);padding:10px 12px;border-radius:12px 0 0 12px;background:#13214a;border:1px solid var(--border);cursor:pointer;font-weight:600;user-select:none;box-shadow:0 8px 30px rgba(0,0,0,.25)}
+    .drawerTab{writing-mode:vertical-rl;transform:rotate(180deg);padding:10px 12px;border-radius:12px 0 0 12px;background:#13214a;border:1px solid var(--border);cursor:pointer;font-weight:700;user-select:none;box-shadow:0 8px 30px rgba(0,0,0,.25)}
     .drawer{width:0;overflow:hidden;transition:width .2s ease;background:transparent;border:0;pointer-events:none}
     .drawer.open{width:360px;background:var(--panel);border:1px solid var(--border);border-right:none;border-radius:18px 0 0 18px;pointer-events:auto}
     .drawerInner{padding:12px;min-width:340px}
     .drawer:not(.open) .hide{display:none}
+
+    textarea{width:100%;min-height:140px;resize:vertical}
   </style>
 </head>
 <body>
@@ -50,11 +60,17 @@
 
 <main>
   <section class="card">
-    <div class="row" style="justify-content:space-between"><div style="font-weight:700">Map</div><div class="badges" id="badges"></div></div>
-    <canvas id="c"></canvas>
+    <div class="row" style="justify-content:space-between">
+      <div style="font-weight:800">Map</div>
+      <div class="badges" id="badges"></div>
+    </div>
+
+    <div class="mapWrap">
+      <canvas id="c"></canvas>
+    </div>
 
     <div class="below">
-      <div style="font-weight:700">Average Swell Period (Dominant) — West → East (~25 mi bins)</div>
+      <div class="periodTitle">Average Swell Period (Dominant) — West → East (~25 mi bins)</div>
       <div id="periods" class="periodBar"></div>
       <div class="legend" id="legend"></div>
     </div>
@@ -64,31 +80,37 @@
 <div class="drawerWrap">
   <div class="drawerTab" id="drawerTab">Controls ▸</div>
   <div class="drawer" id="drawer"><div class="drawerInner">
-    <div style="font-weight:700">Controls</div>
+    <div style="font-weight:800">Controls</div>
     <div class="muted">Optional station filter</div>
     <div class="row" style="margin-top:6px"><input id="stations" placeholder="Station IDs" style="flex:1"/><button class="secondary" id="clear">Clear</button></div>
     <div class="hide" style="margin-top:12px"><textarea id="t" placeholder="# Paste latest_obs.txt here"></textarea><div class="row" style="justify-content:flex-end;margin-top:6px"><button class="secondary" id="parse">Parse Paste</button></div></div>
+    <div class="hide" style="margin-top:10px;font-size:12px;color:var(--muted)">
+      For accurate land + state/country borders, paste clipped/simplified GeoJSON into <code>LAND_GEOJSON</code> and <code>BORDERS_GEOJSON</code> in the script.
+    </div>
   </div></div>
 </div>
 
 <script>
 const PROXY_URL='/.netlify/functions/ndbc-latest';
-const B={minLat:18,maxLat:31.5,minLon:-98,maxLon:-80};
 const $=id=>document.getElementById(id);
 const C=$('c'),ctx=C.getContext('2d');
-let rows=[], CW=1080, CH=560;
-const miss=v=>v==null||v===''||v==='MM',num=v=>miss(v)?null:+v,m2ft=m=>m==null?null:m*3.28084;
+let rows=[], CW=800, CH=500;
 
-// ---- Drop-in accurate basemap support ----
-// Option A (best): paste a CLIPPED+SIMPLIFIED GeoJSON FeatureCollection of land/coastlines into LAND_GEOJSON.
-// It should be clipped to the bbox: lon [-98,-80], lat [18,31.5].
-// Keep it small (TopoJSON or simplified GeoJSON) so this single-file app stays fast.
-const LAND_GEOJSON = null; // <-- paste GeoJSON here when you have it
+// Fixed lon span; lat span auto-expands to match canvas aspect so there is no distortion.
+const LON_MIN=-98, LON_MAX=-80;
+const LAT_MIN_BASE=18, LAT_MAX_BASE=31.5;
+let VIEW={lonMin:LON_MIN, lonMax:LON_MAX, latMin:LAT_MIN_BASE, latMax:LAT_MAX_BASE, cos:Math.cos(((LAT_MIN_BASE+LAT_MAX_BASE)/2)*Math.PI/180)};
 
-// Fallback (still lightweight): hand-drawn coastlines (kept as backup)
-const COAST_US=[[31.0,-80.9],[30.8,-81.5],[30.6,-82.2],[30.4,-83.0],[30.2,-83.8],[29.9,-84.6],[29.6,-85.2],[29.9,-85.9],[30.1,-86.5],[30.3,-87.2],[30.4,-87.8],[30.4,-88.3],[30.2,-88.9],[29.9,-89.5],[29.6,-90.2],[29.3,-90.9],[29.2,-91.6],[29.1,-92.3],[29.1,-93.0],[29.3,-93.6],[29.4,-94.3],[29.3,-95.0],[28.9,-95.7],[28.3,-96.4],[27.7,-96.9],[27.0,-97.2],[26.4,-97.3],[26.0,-97.2]];
-const COAST_MX=[[26.0,-97.2],[25.3,-97.1],[24.4,-96.7],[23.5,-96.3],[22.6,-95.8],[21.6,-95.3],[20.7,-94.9],[19.9,-94.4],[19.4,-93.6],[19.0,-92.7],[18.6,-91.8],[18.4,-90.9],[18.3,-90.1],[18.2,-89.3],[18.3,-88.6],[18.6,-87.9],[19.1,-87.1],[19.7,-86.3],[20.3,-85.6],[21.0,-84.9],[21.7,-84.2],[22.5,-83.5]];
-const COAST_CUBA=[[23.2,-85.3],[22.8,-84.7],[22.3,-84.1],[21.8,-83.5],[21.2,-82.9],[20.6,-82.3],[20.1,-81.8],[19.8,-81.6],[20.5,-81.6],[21.1,-81.7],[21.8,-82.1],[22.4,-82.7],[23.0,-83.6],[23.2,-84.5],[23.2,-85.3]];
+const miss=v=>v==null||v===''||v==='MM';
+const num=v=>miss(v)?null:+v;
+const m2ft=m=>m==null?null:m*3.28084;
+
+// === Drop-in accurate basemap support ===
+// Paste clipped+simplied GeoJSON here (FeatureCollection) for land polygons and border lines.
+// land: Polygon/MultiPolygon (fill)
+// borders: LineString/MultiLineString (stroke)
+const LAND_GEOJSON=null;      // <-- paste land polygons FeatureCollection
+const BORDERS_GEOJSON=null;   // <-- paste border lines FeatureCollection
 
 function resize(){
   const r=C.getBoundingClientRect();
@@ -96,34 +118,51 @@ function resize(){
   const dpr=window.devicePixelRatio||1;
   C.width=Math.max(1,Math.round(CW*dpr));
   C.height=Math.max(1,Math.round(CH*dpr));
-  ctx.setTransform(dpr,0,0,dpr,0,0); // draw in CSS pixels
-  if(rows.length) draw();
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  computeView();
+  draw();
 }
 window.addEventListener('resize',resize,{passive:true});
-resize();
 
-function proj(lat,lon){return[(lon-B.minLon)/(B.maxLon-B.minLon)*CW,(1-(lat-B.minLat)/(B.maxLat-B.minLat))*CH];}
-
-function parseObs(txt){
-  const set=new Set(($('stations').value||'').split(/[\s,]+/).filter(Boolean));
-  rows=txt.split(/\r?\n/).filter(l=>l&&!l.startsWith('#')).map(l=>l.split(/\s+/)).map(f=>({
-    stn:f[0],lat:num(f[1]),lon:num(f[2]),wvht:num(f[11]),dpd:num(f[12])
-  })).filter(p=>p.lat>=B.minLat&&p.lat<=B.maxLat&&p.lon>=B.minLon&&p.lon<=B.maxLon)
-    .filter(p=>!set.size||set.has(p.stn));
-  draw(); badges(); periods();
+function computeView(){
+  // keep lon fixed, expand lat to match aspect (equirectangular w/ cos(midLat) lon scaling)
+  const baseMid=(LAT_MIN_BASE+LAT_MAX_BASE)/2;
+  const cos=Math.cos(baseMid*Math.PI/180);
+  const xSpan=(LON_MAX-LON_MIN)*cos;
+  const latSpanNeeded=xSpan*(CH/CW);
+  let latMin=baseMid-latSpanNeeded/2, latMax=baseMid+latSpanNeeded/2;
+  // ensure original bounds are included
+  latMin=Math.min(latMin, LAT_MIN_BASE);
+  latMax=Math.max(latMax, LAT_MAX_BASE);
+  VIEW={lonMin:LON_MIN, lonMax:LON_MAX, latMin, latMax, cos};
 }
 
-function badges(){
-  const rep=rows.filter(r=>r.wvht!=null),max=Math.max(0,...rep.map(r=>r.wvht));
-  const avg=rep.reduce((a,r)=>a+r.wvht,0)/Math.max(1,rep.length);
-  $('badges').innerHTML=`<span>Stations: ${rows.length}</span><span>WVHT: ${rep.length}</span><span>Max: ${m2ft(max).toFixed(1)} ft</span><span>Avg: ${m2ft(avg).toFixed(1)} ft</span>`;
+function proj(lat,lon){
+  const x=((lon-VIEW.lonMin)*VIEW.cos)/((VIEW.lonMax-VIEW.lonMin)*VIEW.cos)*CW;
+  const y=(1-(lat-VIEW.latMin)/(VIEW.latMax-VIEW.latMin))*CH;
+  return [x,y];
 }
 
 function pColor(s){return s<6?'#60a5fa':s<8?'#34d399':s<10?'#fbbf24':s<12?'#fb7185':'#a78bfa';}
 
+function parseObs(txt){
+  const set=new Set(($('stations').value||'').split(/[\s,]+/).filter(Boolean));
+  rows=txt.split(/\r?\n/).filter(l=>l&&l[0]!=='#').map(l=>l.trim().split(/\s+/)).map(f=>({
+    stn:f[0],lat:num(f[1]),lon:num(f[2]),wvht:num(f[11]),dpd:num(f[12])
+  })).filter(p=>p.lat!=null&&p.lon!=null&&p.lon>=LON_MIN&&p.lon<=LON_MAX&&p.lat>=LAT_MIN_BASE&&p.lat<=LAT_MAX_BASE)
+    .filter(p=>!set.size||set.has(p.stn));
+  badges(); periods(); draw();
+}
+
+function badges(){
+  const rep=rows.filter(r=>r.wvht!=null),max=rep.length?Math.max(...rep.map(r=>r.wvht)):0;
+  const avg=rep.length?rep.reduce((a,r)=>a+r.wvht,0)/rep.length:0;
+  $('badges').innerHTML=`<span>Stations: ${rows.length}</span><span>WVHT: ${rep.length}</span><span>Max: ${m2ft(max).toFixed(1)} ft</span><span>Avg: ${m2ft(avg).toFixed(1)} ft</span>`;
+}
+
 function periods(){
   const out=[];
-  for(let lon=B.minLon;lon<B.maxLon;lon+=0.36){
+  for(let lon=LON_MIN;lon<LON_MAX;lon+=0.36){
     const seg=rows.filter(r=>r.dpd!=null&&r.lon>=lon&&r.lon<lon+0.36);
     if(!seg.length) continue;
     const avg=seg.reduce((a,r)=>a+r.dpd,0)/seg.length;
@@ -138,14 +177,9 @@ function periods(){
     `<span class="sw"><i style="background:#a78bfa"></i>12s+</span>`;
 }
 
-function strokeLine(line,color,w){ctx.strokeStyle=color;ctx.lineWidth=w;ctx.beginPath();line.forEach((p,i)=>{const[x,y]=proj(p[0],p[1]);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke();}
-
-function drawGeoJSON(geo){
-  // Supports FeatureCollection with (Multi)Polygon geometries (common for land).
+function drawGeoJSONPolys(geo, fill, stroke){
   const feats=geo && geo.type==='FeatureCollection' ? geo.features : [];
-  ctx.fillStyle='#0c1b3a';
-  ctx.strokeStyle='#2b4a73';
-  ctx.lineWidth=1.2;
+  ctx.fillStyle=fill; ctx.strokeStyle=stroke; ctx.lineWidth=1;
   for(const f of feats){
     const g=f && f.geometry; if(!g) continue;
     const polys = g.type==='Polygon' ? [g.coordinates] : g.type==='MultiPolygon' ? g.coordinates : null;
@@ -153,7 +187,7 @@ function drawGeoJSON(geo){
     for(const poly of polys){
       ctx.beginPath();
       for(const ring of poly){
-        ring.forEach((pt,i)=>{const lon=pt[0], lat=pt[1]; const [x,y]=proj(lat,lon); i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
+        ring.forEach((pt,i)=>{const lon=pt[0],lat=pt[1];const [x,y]=proj(lat,lon);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
       }
       ctx.closePath();
       ctx.fill();
@@ -162,69 +196,78 @@ function drawGeoJSON(geo){
   }
 }
 
-function fillLandFallback(){
-  // Simple land fill using existing polylines (fallback)
-  ctx.fillStyle='#0c1b3a'; ctx.beginPath();
-  let [x0,y0]=proj(B.maxLat,B.minLon); ctx.moveTo(x0,y0);
-  let [x1,y1]=proj(B.maxLat,B.maxLon); ctx.lineTo(x1,y1);
-  const usStart=COAST_US[0]; const [xs,ys]=proj(usStart[0],usStart[1]); ctx.lineTo(xs,ys);
-  COAST_US.forEach(p=>{const[x,y]=proj(p[0],p[1]);ctx.lineTo(x,y)});
-  const [xl,yl]=proj(B.maxLat,B.minLon); ctx.lineTo(xl,yl);
-  ctx.closePath(); ctx.fill();
+function drawGeoJSONLines(geo, stroke){
+  const feats=geo && geo.type==='FeatureCollection' ? geo.features : [];
+  ctx.strokeStyle=stroke; ctx.lineWidth=1;
+  for(const f of feats){
+    const g=f && f.geometry; if(!g) continue;
+    const lines = g.type==='LineString' ? [g.coordinates] : g.type==='MultiLineString' ? g.coordinates : null;
+    if(!lines) continue;
+    for(const line of lines){
+      ctx.beginPath();
+      line.forEach((pt,i)=>{const lon=pt[0],lat=pt[1];const [x,y]=proj(lat,lon);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
+      ctx.stroke();
+    }
+  }
+}
 
-  ctx.fillStyle='#0c1b3a'; ctx.beginPath();
-  const [a,b]=proj(B.minLat,B.minLon); ctx.moveTo(a,b);
-  const mxStart=COAST_MX[0]; const [mxs,mys]=proj(mxStart[0],mxStart[1]); ctx.lineTo(mxs,mys);
-  COAST_MX.forEach(p=>{const[x,y]=proj(p[0],p[1]);ctx.lineTo(x,y)});
-  const [c,d]=proj(B.minLat,B.maxLon); ctx.lineTo(c,d);
-  const [e,f]=proj(B.minLat,B.minLon); ctx.lineTo(e,f);
-  ctx.closePath(); ctx.fill();
+function drawGraticule(){
+  // Draw lat/lon grid with labels
+  const lonStep=2, latStep=2;
+  ctx.globalAlpha=.18; ctx.strokeStyle='#203056'; ctx.lineWidth=1;
 
-  // Cuba
-  ctx.beginPath();
-  COAST_CUBA.forEach((p,i)=>{const[x,y]=proj(p[0],p[1]);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
-  ctx.closePath(); ctx.fill();
+  for(let lon=Math.ceil(VIEW.lonMin/lonStep)*lonStep; lon<=VIEW.lonMax; lon+=lonStep){
+    const [x0,y0]=proj(VIEW.latMin,lon); const [x1,y1]=proj(VIEW.latMax,lon);
+    ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke();
+    ctx.globalAlpha=.75; ctx.fillStyle='#a7b4db'; ctx.font='11px system-ui';
+    ctx.fillText(`${Math.abs(lon)}°W`, x0+4, CH-6);
+    ctx.globalAlpha=.18;
+  }
+  for(let lat=Math.ceil(VIEW.latMin/latStep)*latStep; lat<=VIEW.latMax; lat+=latStep){
+    const [x0,y0]=proj(lat,VIEW.lonMin); const [x1,y1]=proj(lat,VIEW.lonMax);
+    ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke();
+    ctx.globalAlpha=.75; ctx.fillStyle='#a7b4db'; ctx.font='11px system-ui';
+    ctx.fillText(`${lat.toFixed(0)}°N`, 6, y0-4);
+    ctx.globalAlpha=.18;
+  }
+  ctx.globalAlpha=1;
 }
 
 function draw(){
-  // ocean gradient
+  // ocean
   ctx.clearRect(0,0,CW,CH);
   const g=ctx.createLinearGradient(0,0,0,CH);
   g.addColorStop(0,'#06102a'); g.addColorStop(1,'#071a36');
   ctx.fillStyle=g; ctx.fillRect(0,0,CW,CH);
 
-  // subtle grid
-  ctx.globalAlpha=.10; ctx.strokeStyle='#203056';
-  for(let i=1;i<6;i++){
-    ctx.beginPath();ctx.moveTo(i*CW/6,0);ctx.lineTo(i*CW/6,CH);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(0,i*CH/6);ctx.lineTo(CW,i*CH/6);ctx.stroke();
-  }
-  ctx.globalAlpha=1;
-
   // basemap
-  if(LAND_GEOJSON) drawGeoJSON(LAND_GEOJSON);
-  else {
-    fillLandFallback();
-    strokeLine(COAST_US,'#2b4a73',2);
-    strokeLine(COAST_MX,'#2b4a73',2);
-    strokeLine(COAST_CUBA,'#2b4a73',2);
-  }
+  if(LAND_GEOJSON) drawGeoJSONPolys(LAND_GEOJSON,'#0c1b3a','#2b4a73');
+  if(BORDERS_GEOJSON) drawGeoJSONLines(BORDERS_GEOJSON,'#355f91');
 
-  // buoys
+  // graticule + labels
+  drawGraticule();
+
+  // buoys (color by period, size by wave height)
   rows.forEach(p=>{
     const [x,y]=proj(p.lat,p.lon);
-    const r=Math.max(3,Math.min(18,(p.wvht||0)*6));
+    const r=Math.max(2.5,Math.min(18,(p.wvht||0)*6));
+    const col=p.dpd==null?'#93c5fd':pColor(p.dpd);
     ctx.beginPath();
-    ctx.fillStyle='#0ea5e9'; ctx.strokeStyle='#0284c7';
-    ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=col; ctx.globalAlpha=0.92;
+    ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+    ctx.globalAlpha=1;
+    ctx.strokeStyle='#0b1220'; ctx.lineWidth=1.2;
+    ctx.stroke();
   });
 }
 
 $('live').onclick=async()=>{const r=await fetch(PROXY_URL);if(!r.ok)return alert('Fetch failed');parseObs(await r.text())};
 $('parse').onclick=()=>parseObs($('t').value);
-$('clear').onclick=()=>{rows=[];ctx.clearRect(0,0,CW,CH);$('badges').innerHTML='';$('periods').innerHTML='';$('legend').innerHTML=''};
-$('units').onchange=()=>rows.length&&(draw(),badges(),periods());
+$('clear').onclick=()=>{rows=[];$('badges').innerHTML='';$('periods').innerHTML='';$('legend').innerHTML='';draw()};
+$('units').onchange=()=>rows.length&&(badges(),periods(),draw());
 $('drawerTab').onclick=()=>{const d=$('drawer');d.classList.toggle('open');$('drawerTab').textContent=d.classList.contains('open')?'Controls ◂':'Controls ▸'};
+
+resize();
 </script>
 </body>
 </html>
